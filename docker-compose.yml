@@ -1,0 +1,69 @@
+x-app-env: &app-env
+  APP_NAME: "URL Shortener"
+  APP_ENV: local
+  APP_KEY: base64:TaoKxeAmtCJPmzL3DogRICJfr0wJgjQck4PIKAkkKOo=
+  APP_URL: http://localhost:8000
+  APP_DEBUG: "true"
+  DB_CONNECTION: mysql
+  DB_HOST: mysql
+  DB_PORT: 3306
+  DB_DATABASE: shortener
+  DB_USERNAME: shortener
+  DB_PASSWORD: secret
+  REDIS_CLIENT: phpredis
+  REDIS_HOST: redis
+  REDIS_PASSWORD: null
+  REDIS_PORT: 6379
+  CACHE_STORE: redis
+  QUEUE_CONNECTION: redis
+  SESSION_DRIVER: redis
+  MAIL_MAILER: array
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment: *app-env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: sh -c "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000"
+
+  worker:
+    build: .
+    environment: *app-env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: php artisan queue:work --tries=3
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  mysql:
+    image: mysql:8.4
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: shortener
+      MYSQL_USER: shortener
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: root
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
+    driver: local
